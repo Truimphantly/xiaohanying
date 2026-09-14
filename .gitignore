@@ -1,0 +1,32 @@
+# 敏感信息 — 绝对不能提交（API Key 在这里）
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 运行时产物
+output/
+uploads/
+discussions/
+图库/
+
+# 根目录下 _ 开头的调试临时文件/脚本/图片/日志
+/_*
+
+# 第三方 / 无关内容
+archify/
+.claude/
+helloworld.md
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store
+Thumbs.db

@@ -1,0 +1,2517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>是小寒影！</title>
+    <!-- Markdown 渲染与 HTML 消毒(本地静态文件,见 /static) -->
+    <script src="/static/marked.min.js"></script>
+    <script src="/static/purify.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0a0e1a;
+            color: #e0e6f0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .btn-new-chat {
+            background: rgba(96,165,250,0.1);
+            border: 1px solid rgba(96,165,250,0.25);
+            color: #93b4f5;
+            font-size: 0.75rem;
+            padding: 5px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-new-chat:hover {
+            background: rgba(96,165,250,0.2);
+            border-color: rgba(96,165,250,0.5);
+            color: #fff;
+        }
+        .header-badge {
+            font-size: 0.73rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(20,28,50,0.8);
+            border: 1px solid rgba(96,165,250,0.15);
+            color: #8b98b5;
+            white-space: nowrap;
+        }
+        .model-selector {
+            background: rgba(20,28,50,0.8);
+            border: 1px solid rgba(96,165,250,0.2);
+            color: #93b4f5;
+            font-size: 0.73rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            outline: none;
+            max-width: 110px;
+        }
+        .model-selector:hover { border-color: rgba(96,165,250,0.5); }
+        .model-selector option {
+            background: #141c32;
+            color: #e0e6f0;
+        }
+        /* ===== 顶部栏 ===== */
+        .header {
+            background: rgba(15, 20, 40, 0.95);
+            border-bottom: 1px solid rgba(96, 165, 250, 0.15);
+            padding: 14px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+        }
+        .header h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 2px;
+        }
+        .header .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.82rem;
+            color: #8b98b5;
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #34d399;
+            animation: pulse 2s infinite;
+        }
+        .status-dot.idle { background: #5a6a8a; animation: none; }
+        @keyframes pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(52,211,153,0); }
+        }
+
+        /* ===== 主体 ===== */
+        .main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* ===== 左侧：聊天面板 ===== */
+        .chat-panel {
+            position: relative;   /* 桌宠浮层的定位基准 */
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            border-right: 1px solid rgba(96, 165, 250, 0.1);
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .chat-messages::-webkit-scrollbar { width: 6px; }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(96,165,250,0.2); border-radius: 3px;
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.user { flex-direction: row-reverse; }
+        .message-avatar {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+        .message.user .message-avatar { background: rgba(96,165,250,0.2); }
+        .message.agent .message-avatar { background: rgba(167,139,250,0.2); }
+        .message-bubble {
+            max-width: 75%;
+            padding: 12px 18px;
+            border-radius: 16px;
+            line-height: 1.65;
+            font-size: 0.93rem;
+            word-break: break-word;
+        }
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+            border-bottom-right-radius: 4px;
+        }
+        .message.agent .message-bubble {
+            background: rgba(20, 28, 50, 0.8);
+            border: 1px solid rgba(96,165,250,0.15);
+            border-bottom-left-radius: 4px;
+        }
+        .message.agent .message-bubble p { margin: 6px 0; }
+        .message.agent .message-bubble p:first-child { margin-top: 0; }
+        .message.agent .message-bubble p:last-child { margin-bottom: 0; }
+        .message.agent .message-bubble code {
+            background: rgba(0,0,0,0.4); padding: 2px 6px;
+            border-radius: 4px; font-size: 0.85em;
+        }
+        .message.agent .message-bubble pre {
+            background: rgba(0,0,0,0.4); padding: 12px;
+            border-radius: 8px; overflow-x: auto;
+            margin: 8px 0; font-size: 0.82em;
+        }
+        .message.agent .message-bubble table {
+            border-collapse: collapse; margin: 8px 0; width: 100%;
+        }
+        .message.agent .message-bubble th, .message.agent .message-bubble td {
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 10px; text-align: left; font-size: 0.85em;
+        }
+        .message.agent .message-bubble th { background: rgba(96,165,250,0.1); }
+
+        /* 输入区 */
+        .chat-input-area {
+            padding: 16px 24px;
+            border-top: 1px solid rgba(96,165,250,0.1);
+            display: flex; gap: 10px; align-items: flex-end;
+        }
+        .btn-upload {
+            background: rgba(96,165,250,0.1);
+            border: 1px solid rgba(96,165,250,0.2);
+            color: #93b4f5;
+            font-size: 1.1rem;
+            width: 42px; height: 42px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-upload:hover {
+            background: rgba(96,165,250,0.2);
+            border-color: rgba(96,165,250,0.5);
+        }
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+        .file-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 0;
+        }
+        .file-preview:empty { display: none; }
+        .file-tag {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(96,165,250,0.1);
+            border: 1px solid rgba(96,165,250,0.2);
+            border-radius: 8px;
+            padding: 3px 8px;
+            font-size: 0.73rem;
+            color: #93b4f5;
+            max-width: 200px;
+        }
+        .file-tag img {
+            width: 24px; height: 24px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+        .file-tag .file-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-tag .file-remove {
+            cursor: pointer;
+            color: #f87171;
+            font-weight: bold;
+            margin-left: 2px;
+            flex-shrink: 0;
+        }
+        .file-tag .file-remove:hover { color: #ef4444; }
+        .chat-input-area input {
+            flex: 1;
+            background: rgba(20, 28, 50, 0.8);
+            border: 1px solid rgba(96,165,250,0.2);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #e0e6f0;
+            font-size: 0.93rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .chat-input-area input:focus { border-color: rgba(96,165,250,0.5); }
+        .chat-input-area input::placeholder { color: #5a6a8a; }
+        .chat-input-area input:disabled { opacity: 0.4; }
+        .chat-input-area button {
+            border: none; border-radius: 12px;
+            padding: 12px 24px;
+            color: #fff; font-size: 0.93rem;
+            font-weight: 600; cursor: pointer;
+            transition: all 0.3s; white-space: nowrap;
+        }
+        .btn-send {
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+        }
+        .btn-send:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(37,99,235,0.4);
+        }
+        .btn-send:disabled {
+            opacity: 0.5; cursor: not-allowed;
+            transform: none; box-shadow: none;
+        }
+        .btn-stop {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            display: none;
+        }
+        .btn-stop.visible { display: inline-block; }
+        .btn-stop:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(239,68,68,0.4);
+        }
+
+        /* ===== 右侧：工作流面板 ===== */
+        .workflow-panel {
+            width: 380px;
+            display: flex;
+            flex-direction: column;
+            background: rgba(10, 15, 30, 0.5);
+        }
+        .workflow-header {
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(96,165,250,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .workflow-header .title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #a78bfa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .workflow-header .thinking-indicator {
+            font-size: 0.75rem;
+            color: #fbbf24;
+            display: none;
+            align-items: center;
+            gap: 5px;
+        }
+        .workflow-header .thinking-indicator.active { display: flex; }
+        .thinking-dots {
+            display: flex; gap: 3px;
+        }
+        .thinking-dots span {
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: #fbbf24;
+            animation: dotBounce 1.4s infinite ease-in-out;
+        }
+        .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotBounce {
+            0%,80%,100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        .stop-btn {
+            background: rgba(239,68,68,0.15);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #f87171;
+            font-size: 0.75rem;
+            padding: 5px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .stop-btn.visible { display: block; }
+        .stop-btn:hover {
+            background: rgba(239,68,68,0.3);
+            border-color: #f87171;
+        }
+        .workflow-steps {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .workflow-steps::-webkit-scrollbar { width: 4px; }
+        .workflow-steps::-webkit-scrollbar-thumb {
+            background: rgba(96,165,250,0.2); border-radius: 2px;
+        }
+
+        /* 步骤节点 */
+        .step-node {
+            display: flex;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .step-line {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .step-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 5px;
+        }
+        .step-dot.tool { background: #60a5fa; }
+        .step-dot.result { background: #34d399; }
+        .step-dot.error { background: #f87171; }
+        .step-connector {
+            width: 2px;
+            flex: 1;
+            min-height: 8px;
+            background: rgba(96,165,250,0.12);
+            margin: 2px 0;
+        }
+        .step-content {
+            flex: 1;
+            padding: 8px 12px;
+            background: rgba(20, 28, 50, 0.5);
+            border: 1px solid rgba(96,165,250,0.08);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            min-width: 0;
+        }
+        .step-content .step-label {
+            font-size: 0.68rem;
+            color: #5a6a8a;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 3px;
+        }
+        .step-content .step-name {
+            color: #60a5fa;
+            font-weight: 600;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.8rem;
+        }
+        .step-content .step-args {
+            color: #6b7a95;
+            font-size: 0.73rem;
+            margin-top: 3px;
+            word-break: break-all;
+        }
+        .step-content .step-result-text {
+            color: #8b9ab5;
+            font-size: 0.73rem;
+            margin-top: 3px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 60px;
+            overflow-y: auto;
+        }
+        .step-content.error-box {
+            border-color: rgba(248,113,113,0.3);
+            background: rgba(248,113,113,0.05);
+        }
+
+        /* 空状态 */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #5a6a8a;
+            gap: 12px;
+            font-size: 0.85rem;
+            padding: 20px;
+            text-align: center;
+        }
+        .empty-state .icon { font-size: 3rem; opacity: 0.4; }
+
+        .step-dot.notice { background: #fbbf24; }
+        .step-content.notice-box {
+            border-color: rgba(251,191,36,0.25);
+            background: rgba(251,191,36,0.06);
+        }
+        .step-dot.approval { background: #fb923c; }
+        .step-content.approval-box {
+            border-color: rgba(251,146,60,0.4);
+            background: rgba(251,146,60,0.08);
+        }
+        .approval-btns { display: flex; gap: 8px; margin-top: 4px; }
+        .approval-btns button {
+            padding: 4px 14px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: opacity 0.15s;
+        }
+        .approval-btns button:disabled { opacity: 0.4; cursor: default; }
+        .btn-allow {
+            background: #34d399; color: #06281b;
+        }
+        .btn-allow:hover:not(:disabled) { background: #2ec08a; }
+        .btn-deny {
+            background: #f87171; color: #2a0a0a;
+        }
+        .btn-deny:hover:not(:disabled) { background: #e25c5c; }
+        .approval-wait { color: #fbbf24; font-size: 0.72rem; margin-top: 4px; }
+        .approval-answered { color: #8b9ab5; font-size: 0.72rem; margin-top: 4px; }
+
+        /* 打字机光标:流式输出期间显示在文本末尾 */
+        .typing::after {
+            content: '▍';
+            color: #60a5fa;
+            animation: caretBlink 0.7s step-end infinite;
+        }
+        @keyframes caretBlink {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+
+        /* ====== 多模型讨论栏 ====== */
+        /* 讨论模式下替掉执行流程栏:讨论全程不调工具,那一栏本来就是空的,
+           占着地方反而把聊天区挤没了。聊天模式一切照旧。 */
+        .discuss-panel {
+            display: none;
+            width: 440px;
+            flex-direction: column;
+            background: rgba(10, 15, 30, 0.5);
+            border-left: 1px solid rgba(96,165,250,0.1);
+        }
+        body.discussing .workflow-panel { display: none; }
+        body.discussing .discuss-panel { display: flex; }
+
+        .discuss-header {
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(96,165,250,0.1);
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        }
+        .discuss-header .title {
+            font-size: 0.9rem; font-weight: 600; color: #a78bfa;
+            display: flex; align-items: center; gap: 8px; min-width: 0;
+        }
+        .discuss-badge {
+            font-size: 0.7rem; font-weight: 400; color: #fbbf24;
+            background: rgba(251,191,36,0.1);
+            border: 1px solid rgba(251,191,36,0.2);
+            padding: 2px 8px; border-radius: 8px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 190px;
+        }
+        .discuss-badge.paused {
+            color: #fdba74; border-color: rgba(251,146,60,0.45);
+            background: rgba(251,146,60,0.14);
+        }
+        .discuss-pause-btn {
+            flex-shrink: 0; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+            font-size: 0.76rem; font-weight: 600; transition: all 0.15s;
+            border: 1px solid rgba(148,163,184,0.3);
+            background: rgba(148,163,184,0.1); color: #9aa8c2;
+        }
+        .discuss-pause-btn:hover { background: rgba(148,163,184,0.2); }
+        .discuss-pause-btn.paused {
+            border-color: rgba(251,146,60,0.5);
+            background: rgba(251,146,60,0.18); color: #fdba74;
+        }
+
+        /* 参与者勾选条:添加新角色后这里会自动多出一个 chip */
+        .discuss-roles-bar {
+            padding: 8px 20px; display: flex; flex-wrap: wrap; gap: 6px;
+            border-bottom: 1px solid rgba(96,165,250,0.08);
+        }
+        .role-chip {
+            font-size: 0.72rem; padding: 3px 10px; border-radius: 10px;
+            border: 1px solid rgba(148,163,184,0.25);
+            background: rgba(148,163,184,0.08); color: #7c8db5;
+            cursor: pointer; user-select: none; transition: all 0.15s;
+        }
+        .role-chip:hover { border-color: rgba(148,163,184,0.5); }
+        .role-chip.on { color: #dbeafe; }
+
+        .discuss-messages {
+            flex: 1; overflow-y: auto; padding: 16px;
+            display: flex; flex-direction: column; gap: 13px;
+        }
+        .discuss-messages::-webkit-scrollbar { width: 6px; }
+        .discuss-messages::-webkit-scrollbar-thumb {
+            background: rgba(96,165,250,0.2); border-radius: 3px;
+        }
+        .discuss-empty {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 10px;
+            color: #5a6a8a; font-size: 0.82rem; text-align: center; line-height: 1.7;
+        }
+        .discuss-empty .icon { font-size: 2rem; opacity: 0.5; }
+
+        /* 一条发言:头像 + 名字 + (思考过程) + 正文 */
+        .dm { display: flex; gap: 9px; animation: fadeIn 0.3s ease; }
+        .dm-avatar {
+            width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem;
+        }
+        .dm-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+        .dm-head { display: flex; align-items: baseline; gap: 7px; font-size: 0.73rem; }
+        .dm-head .name { font-weight: 600; }
+        .dm-head .model { color: #4d5a75; font-size: 0.66rem; }
+        .dm-bubble {
+            padding: 9px 13px; border-radius: 12px; border-bottom-left-radius: 3px;
+            background: rgba(20, 28, 50, 0.85);
+            border: 1px solid rgba(96,165,250,0.14);
+            border-left-width: 3px;
+            font-size: 0.82rem; line-height: 1.6;
+            word-break: break-word; overflow-wrap: anywhere;
+        }
+        .dm-bubble p { margin: 5px 0; }
+        .dm-bubble p:first-child { margin-top: 0; }
+        .dm-bubble p:last-child { margin-bottom: 0; }
+        .dm-bubble code {
+            background: rgba(0,0,0,0.4); padding: 1px 5px;
+            border-radius: 4px; font-size: 0.86em;
+        }
+        .dm-bubble pre {
+            background: rgba(0,0,0,0.4); padding: 10px; border-radius: 6px;
+            overflow-x: auto; margin: 6px 0; font-size: 0.8em;
+        }
+        .dm-bubble h1, .dm-bubble h2, .dm-bubble h3 { font-size: 0.95rem; margin: 8px 0 4px; }
+        .dm-bubble ul, .dm-bubble ol { margin: 5px 0; padding-left: 20px; }
+
+        /* 用户插话:和模型的发言明显区分开,一眼能看出中间有人插了嘴 */
+        .dm.user .dm-bubble {
+            background: linear-gradient(135deg, rgba(37,99,235,0.32), rgba(79,70,229,0.32));
+            border-color: rgba(96,165,250,0.4);
+            border-left-color: #60a5fa;
+        }
+
+        /* 轮次分隔 */
+        .dm-round {
+            display: flex; align-items: center; gap: 10px;
+            margin: 4px 0 0; color: #7c8db5; font-size: 0.7rem;
+        }
+        .dm-round::before, .dm-round::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(96,165,250,0.22), transparent);
+        }
+        .dm-round .phase {
+            padding: 2px 10px; border-radius: 9px; white-space: nowrap;
+            background: rgba(96,165,250,0.1);
+            border: 1px solid rgba(96,165,250,0.2);
+        }
+        .dm-round.paused .phase,
+        .dm-round.user .phase {
+            background: rgba(251,146,60,0.15);
+            border-color: rgba(251,146,60,0.45); color: #fdba74;
+        }
+
+        /* 推理模型的思考过程。
+           这段占了输出的绝大部分(sensenova 实测一次发言 3880 字推理才配 48 字正文),
+           实时显示它,用户才不会觉得十几秒的等待是卡死了;正文一开始就自动收起。 */
+        .reasoning-box {
+            font-size: 0.73rem;
+            border: 1px dashed rgba(148,163,184,0.25);
+            border-radius: 8px;
+            background: rgba(15, 20, 35, 0.5);
+            overflow: hidden;
+        }
+        .reasoning-box summary {
+            cursor: pointer; padding: 5px 11px; color: #6b7a95;
+            user-select: none; list-style: none;
+        }
+        .reasoning-box summary::-webkit-details-marker { display: none; }
+        .reasoning-box summary::before { content: '💭 '; }
+        .reasoning-box[open] summary { border-bottom: 1px solid rgba(148,163,184,0.15); }
+        .reasoning-box.streaming summary { color: #93b4f5; }
+        .reasoning-text {
+            padding: 7px 11px; color: #6b7a95;
+            white-space: pre-wrap; word-break: break-word;
+            max-height: 200px; overflow-y: auto; line-height: 1.5;
+        }
+
+        /* 最终结论 */
+        .dm.conclusion .dm-bubble {
+            background: rgba(30, 24, 55, 0.85);
+            border-color: rgba(167,139,250,0.4);
+            border-left-color: #a78bfa;
+        }
+        .conclusion-actions { margin-top: 11px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .conclusion-actions button {
+            padding: 6px 14px; border-radius: 8px; cursor: pointer;
+            font-size: 0.76rem; font-weight: 600; transition: background 0.15s;
+            border: 1px solid rgba(96,165,250,0.35);
+            background: rgba(96,165,250,0.12); color: #93b4f5;
+        }
+        .conclusion-actions button:hover { background: rgba(96,165,250,0.25); }
+
+        .discuss-input-area {
+            padding: 12px 16px;
+            border-top: 1px solid rgba(96,165,250,0.1);
+            display: flex; gap: 8px;
+        }
+        .discuss-input-area input {
+            flex: 1; min-width: 0;
+            background: rgba(20,28,50,0.8);
+            border: 1px solid rgba(96,165,250,0.18);
+            border-radius: 8px; padding: 8px 12px;
+            color: #dbeafe; font-size: 0.82rem; outline: none;
+        }
+        .discuss-input-area input:focus { border-color: rgba(96,165,250,0.5); }
+        .discuss-input-area input::placeholder { color: #4d5a75; }
+        .btn-interject {
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; flex-shrink: 0;
+            font-size: 0.8rem; font-weight: 600;
+            border: 1px solid rgba(96,165,250,0.35);
+            background: rgba(96,165,250,0.15); color: #93b4f5;
+        }
+        .btn-interject:hover { background: rgba(96,165,250,0.28); }
+
+        .btn-mode {
+            background: rgba(96,165,250,0.1);
+            border: 1px solid rgba(96,165,250,0.2);
+            color: #93b4f5; padding: 5px 12px;
+            border-radius: 8px; cursor: pointer;
+            font-size: 0.8rem; transition: all 0.15s;
+        }
+        .btn-mode.active {
+            background: rgba(167,139,250,0.25);
+            border-color: rgba(167,139,250,0.5);
+            color: #c4b5fd;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .main { flex-direction: column; }
+            .workflow-panel { width: 100%; height: 250px; }
+            .discuss-panel { width: 100%; height: 300px; border-left: none; }
+            .chat-panel { border-right: none; }
+        }
+
+        /* ===== 桌宠：小寒影的分身（纯前端，只消费已有 SSE 事件）===== */
+        /* 落点是左侧聊天面板内部（absolute），不再用 fixed 压住右下角，
+           因此不会盖到讨论栏的「发言」按钮 —— 这是旧版 fixed 定位的实际问题 */
+        .pet-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;   /* 只有桌宠本体可点，其余一律穿透 */
+            z-index: 6;
+        }
+        #pet {
+            position: absolute;
+            right: 18px;
+            bottom: 100px;          /* 抬到输入区上方，不挡「发送」 */
+            width: 80px;
+            pointer-events: auto;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+        }
+        #pet.dragging { cursor: grabbing; }
+        #pet:focus-visible .pet-figure { filter: drop-shadow(0 0 7px rgba(96,165,250,.9)); }
+        #pet .pet-figure { display: block; width: 100%; height: auto; overflow: visible; }
+
+        .pet-glow { opacity: .5; }
+
+        /* —— 表情：默认全隐，按状态显示 —— */
+        #pet .pet-eyes-open, #pet .pet-eyes-shut,
+        #pet .pet-mouth-cat, #pet .pet-mouth-flat,
+        #pet .pet-mouth-open, #pet .pet-mouth-o { display: none; }
+        #pet .pet-eyes-open { display: block; }
+        #pet .pet-mouth-cat { display: block; }
+
+        #pet.blink .pet-eyes-open { display: none; }
+        #pet.blink .pet-eyes-shut { display: block; }
+
+        #pet[data-state="think"] .pet-mouth-cat { display: none; }
+        #pet[data-state="think"] .pet-mouth-o { display: block; }
+        #pet[data-state="work"] .pet-mouth-cat { display: none; }
+        #pet[data-state="work"] .pet-mouth-flat { display: block; }
+        #pet[data-state="talk"] .pet-mouth-cat { display: none; }
+        #pet[data-state="talk"] .pet-mouth-open { display: block; animation: petTalk .26s steps(2, jump-none) infinite; }
+
+        /* 完成/开心：眯眼笑，短暂覆盖当前表情 */
+        #pet.pet--happy .pet-eyes-open { display: none; }
+        #pet.pet--happy .pet-eyes-shut { display: block; }
+        #pet.pet--happy .pet-mouth-cat, #pet.pet--happy .pet-mouth-flat,
+        #pet.pet--happy .pet-mouth-o { display: none; }
+        #pet.pet--happy .pet-mouth-open { display: block; }
+
+        /* —— 眼神 —— */
+        #pet .pet-gaze {
+            transform-box: view-box; transform-origin: 60px 65px;
+            transition: transform .35s cubic-bezier(.34,1.4,.64,1);
+        }
+        #pet[data-state="think"] .pet-gaze { transform: translate(0, -2.8px); }
+        #pet[data-state="work"]  .pet-gaze { transform: translate(0, 1px) scale(.88); }
+        #pet.pet--happy .pet-gaze { transform: translate(0, -1px); }
+
+        /* —— 整体浮动 / 干活时小幅抖动 —— */
+        #pet .pet-figure { transform-box: view-box; transform-origin: 60px 140px; }
+        #pet[data-state="idle"]  .pet-figure { animation: petFloat 3.4s ease-in-out infinite; }
+        #pet[data-state="think"] .pet-figure { animation: petFloat 2.2s ease-in-out infinite; }
+        #pet[data-state="work"]  .pet-figure { animation: petBob .72s ease-in-out infinite; }
+        #pet[data-state="talk"]  .pet-figure { animation: petFloat 3s ease-in-out infinite; }
+        @keyframes petFloat {
+            0%, 100% { transform: translateY(0); }
+            50%      { transform: translateY(-3.5px); }
+        }
+        @keyframes petBob {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50%      { transform: translateY(-2.4px) rotate(-1.2deg); }
+        }
+        @keyframes petTalk {
+            0%   { transform: scaleY(1); }
+            100% { transform: scaleY(.55); }
+        }
+
+        /* —— 头 / 耳 / 尾 / 呆毛 —— */
+        #pet .pet-head {
+            transform-box: view-box; transform-origin: 60px 90px;
+            transition: transform .4s cubic-bezier(.34,1.4,.64,1);
+        }
+        #pet[data-state="think"] .pet-head { transform: rotate(-4.5deg); }
+        #pet[data-state="work"]  .pet-head { transform: rotate(1.5deg); }
+
+        #pet .pet-tail {
+            transform-box: view-box; transform-origin: 84px 126px;
+            animation: petTail 3.6s ease-in-out infinite;
+        }
+        #pet[data-state="think"] .pet-tail { animation-duration: 2.4s; }
+        #pet[data-state="work"]  .pet-tail { animation-duration: 1.05s; }
+        #pet[data-state="talk"]  .pet-tail { animation-duration: 1.7s; }
+        @keyframes petTail {
+            0%, 100% { transform: rotate(-4deg); }
+            50%      { transform: rotate(7deg); }
+        }
+
+        #pet .pet-ahoge {
+            transform-box: view-box; transform-origin: 60px 23px;
+            animation: petAhoge 2.8s ease-in-out infinite;
+        }
+        @keyframes petAhoge {
+            0%, 100% { transform: rotate(-7deg); }
+            50%      { transform: rotate(8deg); }
+        }
+
+        #pet .pet-ear-l, #pet .pet-ear-r { transform-box: view-box; }
+        #pet .pet-ear-l { transform-origin: 40px 45px; }
+        #pet .pet-ear-r { transform-origin: 80px 45px; }
+
+        /* —— 状态挂件：思考的省略号、干活的星光 —— */
+        #pet .pet-prop { opacity: 0; transition: opacity .3s; }
+        #pet[data-state="think"] .pet-prop-think { opacity: 1; }
+        #pet[data-state="work"]  .pet-prop-work  { opacity: 1; }
+        #pet[data-state="think"] .pet-prop-think circle { animation: petDot 1.2s ease-in-out infinite; }
+        #pet[data-state="think"] .pet-prop-think circle:nth-child(2) { animation-delay: .18s; }
+        #pet[data-state="think"] .pet-prop-think circle:nth-child(3) { animation-delay: .36s; }
+        @keyframes petDot {
+            0%, 100% { transform: translateY(0); opacity: .35; }
+            50%      { transform: translateY(-3px); opacity: 1; }
+        }
+        #pet[data-state="work"] .pet-prop-work path { animation: petTwinkle 1.05s ease-in-out infinite; }
+        @keyframes petTwinkle {
+            0%, 100% { transform: scale(.7) rotate(0deg); opacity: .5; }
+            50%      { transform: scale(1.1) rotate(22deg); opacity: 1; }
+        }
+
+        /* —— 随机待机小动作 —— */
+        #pet.act-twitch .pet-ear-l { animation: petTwitchL .6s ease; }
+        #pet.act-twitch2 .pet-ear-r { animation: petTwitchR .6s ease; }
+        @keyframes petTwitchL {
+            0%, 100% { transform: rotate(0deg); }
+            30%      { transform: rotate(-13deg); }
+            60%      { transform: rotate(5deg); }
+        }
+        @keyframes petTwitchR {
+            0%, 100% { transform: rotate(0deg); }
+            30%      { transform: rotate(13deg); }
+            60%      { transform: rotate(-5deg); }
+        }
+        #pet.act-hop .pet-figure { animation: petHop .62s cubic-bezier(.3,1.5,.5,1); }
+        @keyframes petHop {
+            0%   { transform: translateY(0) scale(1, 1); }
+            18%  { transform: translateY(0) scale(1.06, .93); }
+            50%  { transform: translateY(-11px) scale(.97, 1.05); }
+            82%  { transform: translateY(0) scale(1.05, .95); }
+            100% { transform: translateY(0) scale(1, 1); }
+        }
+        #pet.act-stretch .pet-figure { animation: petStretch .9s ease-in-out; }
+        @keyframes petStretch {
+            0%, 100% { transform: scale(1, 1); }
+            45%      { transform: scale(1.07, .93) translateY(2px); }
+        }
+        #pet.act-sway .pet-figure { animation: petSway 1.5s ease-in-out; }
+        @keyframes petSway {
+            0%, 100% { transform: rotate(0deg); }
+            25%      { transform: rotate(-5deg); }
+            70%      { transform: rotate(4deg); }
+        }
+        #pet.act-shake .pet-figure { animation: petShake .55s ease-in-out; }
+        @keyframes petShake {
+            0%, 100% { transform: translateX(0); }
+            20%      { transform: translateX(-4px) rotate(-3deg); }
+            45%      { transform: translateX(4px) rotate(3deg); }
+            70%      { transform: translateX(-2px) rotate(-1.5deg); }
+        }
+
+        /* —— 等用户批准：琥珀色呼吸警示（这一刻后端真的卡住了）—— */
+        #pet.alert { animation: petAlertGlow 1.05s ease-in-out infinite; }
+        #pet.alert .pet-figure { filter: drop-shadow(0 0 9px rgba(251,191,36,.85)); }
+        @keyframes petAlertGlow {
+            0%, 100% { filter: none; }
+            50%      { filter: drop-shadow(0 0 8px rgba(251,191,36,.5)); }
+        }
+
+        /* —— 气泡 —— */
+        #petBubble {
+            position: absolute;
+            right: 100%; bottom: 62%;
+            margin-right: 6px;
+            max-width: 180px; width: max-content;
+            padding: 7px 11px;
+            border-radius: 12px;
+            background: rgba(17, 24, 43, .97);
+            border: 1px solid rgba(96,165,250,.32);
+            color: #d7e4ff;
+            font-size: .76rem; line-height: 1.45;
+            box-shadow: 0 6px 20px rgba(0,0,0,.5);
+            opacity: 0; transform: translateX(6px) scale(.95);
+            transition: opacity .2s, transform .2s;
+            pointer-events: none;
+            z-index: 3;
+        }
+        #petBubble.show { opacity: 1; transform: translateX(0) scale(1); }
+        #petBubble.flip {
+            right: auto; left: 100%;
+            margin-right: 0; margin-left: 6px;
+            transform: translateX(-6px) scale(.95);
+        }
+        #petBubble.flip.show { transform: translateX(0) scale(1); }
+        #petBubble::after {
+            content: ""; position: absolute; top: 50%; right: -5px; margin-top: -5px;
+            width: 9px; height: 9px;
+            background: rgba(17,24,43,.97);
+            border-right: 1px solid rgba(96,165,250,.32);
+            border-top: 1px solid rgba(96,165,250,.32);
+            transform: rotate(45deg);
+        }
+        #petBubble.flip::after { right: auto; left: -5px; transform: rotate(-135deg); }
+
+        @media (max-width: 768px) {
+            #pet { right: 10px; bottom: 92px; width: 66px; }
+            #petBubble { max-width: 150px; font-size: .72rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #pet, #pet * { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>⚡ 是小寒影！</h1>
+    <div class="status" style="gap: 12px;">
+        <span class="header-badge" id="modelBadge" title="当前模型">🧠 加载中...</span>
+        <span class="header-badge" id="toolBadge" title="可用工具数量">🔧 0 APIs</span>
+        <select class="model-selector" id="modelSelector" onchange="switchModel(this.value)" title="切换模型">
+            <option value="">切换模型...</option>
+        </select>
+        <select class="model-selector" id="personaSelector" onchange="setPersona(this.value)" title="切换角色预设" style="max-width:150px">
+            <option value="">角色...</option>
+        </select>
+        <button class="btn-mode" id="modeBtn" onclick="toggleMode()"
+                title="讨论模式：让几个不同厂商的模型互相挑错，吵出一个结论">💬 聊天模式</button>
+        <button class="btn-new-chat" onclick="newConversation()" title="开启新对话">＋ 新对话</button>
+        <span class="status-dot idle" id="statusDot"></span>
+        <span id="statusText">就绪</span>
+    </div>
+</div>
+
+<div class="main">
+    <!-- 左侧：聊天 -->
+    <div class="chat-panel">
+        <div class="chat-messages" id="chatMessages">
+            <div class="message agent">
+                <div class="message-avatar">🤖</div>
+                <div class="message-bubble">
+                    你好呀主人~ 喵~ 🐱<br><br>
+                    我是 <b>小寒影</b>，一只会写代码的猫娘！<br><br>
+                    📂 <b>操作文件</b> — 查看目录、读写文件<br>
+                    🌐 <b>抓取网页</b> — 获取网页内容、调用 API<br>
+                    ⚙️ <b>执行代码</b> — 运行 Python 脚本<br><br>
+                    试试输入一个任务，或者直接和我聊天吧喵~
+                </div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="file" id="fileInput" accept="*/*" multiple style="display:none" onchange="handleFileUpload()" />
+            <button class="btn-upload" id="uploadBtn" onclick="document.getElementById('fileInput').click()" title="上传文件/图片">📎</button>
+            <div class="input-wrapper">
+                <div class="file-preview" id="filePreview"></div>
+                <input type="text" id="chatInput"
+                    placeholder="输入任务或直接聊天..."
+                    onkeydown="if(event.key==='Enter' && !sendBtn.disabled) sendMessage()" />
+            </div>
+            <button class="btn-send" id="sendBtn" onclick="sendMessage()">发送</button>
+            <button class="btn-stop" id="stopBtn" onclick="stopTask()">⏹ 停止</button>
+        </div>
+
+        <!-- 桌宠：小寒影的分身。点击互动 / 双击填提示词 / 可拖动，只消费已有 SSE 事件，纯前端 -->
+        <div class="pet-layer" id="petLayer">
+            <div id="pet" data-state="idle" role="button" tabindex="0"
+                 aria-label="小寒影桌宠：点击互动，双击把提示词填进输入框，按住可拖动">
+                <svg class="pet-figure" viewBox="0 0 120 152" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="petHair" gradientUnits="userSpaceOnUse" x1="60" y1="14" x2="60" y2="126">
+                            <stop offset="0" stop-color="#e3d8ff"/><stop offset=".42" stop-color="#bda6f7"/><stop offset="1" stop-color="#7a5fd4"/>
+                        </linearGradient>
+                        <linearGradient id="petHairBack" gradientUnits="userSpaceOnUse" x1="60" y1="20" x2="60" y2="120">
+                            <stop offset="0" stop-color="#b9a3f5"/><stop offset="1" stop-color="#6a51c2"/>
+                        </linearGradient>
+                        <linearGradient id="petSkin" x1="0.5" y1="0" x2="0.5" y2="1">
+                            <stop offset="0" stop-color="#fff3ea"/><stop offset="1" stop-color="#ffdcc8"/>
+                        </linearGradient>
+                        <linearGradient id="petDress" x1="0.5" y1="0" x2="0.5" y2="1">
+                            <stop offset="0" stop-color="#5a6dc0"/><stop offset="1" stop-color="#2e3a78"/>
+                        </linearGradient>
+                        <linearGradient id="petIris" x1="0.5" y1="0" x2="0.5" y2="1">
+                            <stop offset="0" stop-color="#b3dbff"/><stop offset=".55" stop-color="#5b8cf0"/><stop offset="1" stop-color="#2748b8"/>
+                        </linearGradient>
+                        <radialGradient id="petAura" cx="0.5" cy="0.5" r="0.5">
+                            <stop offset="0" stop-color="#6f97ff" stop-opacity=".34"/>
+                            <stop offset="1" stop-color="#6f97ff" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+
+                    <ellipse class="pet-glow" cx="60" cy="78" rx="54" ry="62" fill="url(#petAura)"/>
+
+                    <!-- 尾巴：从胯部后方伸出、只卷到腰高（太高会看着像从肩膀长出来） -->
+                    <g class="pet-tail">
+                        <path d="M84,126 C104,130 114,122 112,112 C110,105 104,103 100,108"
+                              fill="none" stroke="url(#petHair)" stroke-width="12" stroke-linecap="round"/>
+                        <circle cx="100" cy="108" r="5.6" fill="#f7f3ff"/>
+                    </g>
+
+                    <!-- 身体 -->
+                    <g class="pet-body">
+                        <rect x="54" y="86" width="12" height="16" rx="5.5" fill="#f0c9b4"/>
+                        <rect x="49" y="121" width="9" height="17" rx="4.5" fill="#ffdcc8"/>
+                        <rect x="62" y="121" width="9" height="17" rx="4.5" fill="#ffdcc8"/>
+                        <ellipse cx="53.5" cy="139" rx="8" ry="5.2" fill="#3d4a86"/>
+                        <ellipse cx="66.5" cy="139" rx="8" ry="5.2" fill="#3d4a86"/>
+                        <path d="M60,100 C74,100 82,108 85,118 L86,123 C86,126 82,127 60,127 C38,127 34,126 34,123 L35,118 C38,108 46,100 60,100 Z"
+                              fill="url(#petDress)" stroke="#7186dd" stroke-width="1.2" stroke-linejoin="round"/>
+                        <path d="M36.5,109 C46,112 74,112 83.5,109 L85,115 C74,118 46,118 35,115 Z"
+                              fill="#5b6fc0" opacity=".9"/>
+                        <path d="M34.6,121 C40,125 80,125 85.4,121 L86,123 C86,126 82,127 60,127 C38,127 34,126 34,123 Z"
+                              fill="#7dd3fc" opacity=".6"/>
+                        <path d="M44,106 C37,112 35,119 37,124" fill="none" stroke="url(#petSkin)" stroke-width="9" stroke-linecap="round"/>
+                        <path d="M76,106 C83,112 85,119 83,124" fill="none" stroke="url(#petSkin)" stroke-width="9" stroke-linecap="round"/>
+                        <path d="M44,106 C40,109 38,113 37,117" fill="none" stroke="#3a4a8c" stroke-width="10.5" stroke-linecap="round"/>
+                        <path d="M76,106 C80,109 82,113 83,117" fill="none" stroke="#3a4a8c" stroke-width="10.5" stroke-linecap="round"/>
+                        <path d="M56,104 L44,97 L44,111 Z" fill="#f9a8c9"/>
+                        <path d="M64,104 L76,97 L76,111 Z" fill="#f9a8c9"/>
+                        <circle cx="60" cy="104" r="4.4" fill="#ffd3e4"/>
+                    </g>
+
+                    <!-- 头 -->
+                    <g class="pet-head">
+                        <ellipse cx="60" cy="62" rx="37" ry="31" fill="url(#petHairBack)"/>
+
+                        <g class="pet-ear pet-ear-l">
+                            <path d="M35,46 Q24,26 26,11 Q43,21 56,32 Q46,42 35,46 Z"
+                                  fill="url(#petHairBack)" stroke="#7f63d8" stroke-width="1.2" stroke-linejoin="round"/>
+                            <path d="M38,42 Q31,28 32,18 Q42,25 50,33 Q43,40 38,42 Z" fill="#f9a8c9"/>
+                        </g>
+                        <g class="pet-ear pet-ear-r">
+                            <path d="M85,46 Q96,26 94,11 Q77,21 64,32 Q74,42 85,46 Z"
+                                  fill="url(#petHairBack)" stroke="#7f63d8" stroke-width="1.2" stroke-linejoin="round"/>
+                            <path d="M82,42 Q89,28 88,18 Q78,25 70,33 Q77,40 82,42 Z" fill="#f9a8c9"/>
+                        </g>
+
+                        <ellipse cx="60" cy="64" rx="31" ry="29" fill="url(#petSkin)"/>
+                        <ellipse cx="41" cy="76" rx="8" ry="4.6" fill="#f9a8c9" opacity=".5"/>
+                        <ellipse cx="79" cy="76" rx="8" ry="4.6" fill="#f9a8c9" opacity=".5"/>
+
+                        <g class="pet-eyes">
+                            <g class="pet-eyes-shut">
+                                <path d="M40,65 Q48,59 56,65" fill="none" stroke="#4a3a6b" stroke-width="2.6" stroke-linecap="round"/>
+                                <path d="M64,65 Q72,59 80,65" fill="none" stroke="#4a3a6b" stroke-width="2.6" stroke-linecap="round"/>
+                            </g>
+                            <g class="pet-eyes-open">
+                                <g class="pet-gaze">
+                                    <ellipse cx="48" cy="65" rx="8.6" ry="10.8" fill="url(#petIris)"/>
+                                    <ellipse cx="72" cy="65" rx="8.6" ry="10.8" fill="url(#petIris)"/>
+                                    <ellipse cx="48" cy="66.2" rx="3.8" ry="6" fill="#141d3c"/>
+                                    <ellipse cx="72" cy="66.2" rx="3.8" ry="6" fill="#141d3c"/>
+                                    <circle cx="45" cy="60.2" r="3" fill="#fff"/>
+                                    <circle cx="69" cy="60.2" r="3" fill="#fff"/>
+                                    <circle cx="50.8" cy="70.4" r="1.6" fill="#fff" opacity=".85"/>
+                                    <circle cx="74.8" cy="70.4" r="1.6" fill="#fff" opacity=".85"/>
+                                </g>
+                                <path d="M39,57.5 Q48,50.5 57,56.5" fill="none" stroke="#4a3a6b" stroke-width="2.8" stroke-linecap="round"/>
+                                <path d="M63,56.5 Q72,50.5 81,57.5" fill="none" stroke="#4a3a6b" stroke-width="2.8" stroke-linecap="round"/>
+                            </g>
+                        </g>
+
+                        <g class="pet-mouth">
+                            <path class="pet-mouth-cat" d="M53,78.5 Q56.5,83.5 60,78.5 Q63.5,83.5 67,78.5"
+                                  fill="none" stroke="#c9707f" stroke-width="2.4" stroke-linecap="round"/>
+                            <path class="pet-mouth-flat" d="M54.5,80.5 L65.5,80.5" fill="none" stroke="#c9707f" stroke-width="2.4" stroke-linecap="round"/>
+                            <ellipse class="pet-mouth-open" cx="60" cy="80" rx="4.8" ry="5.4" fill="#c9707f"/>
+                            <circle class="pet-mouth-o" cx="60" cy="80" r="3.4" fill="#c9707f"/>
+                        </g>
+
+                        <!-- 刘海：谷底压到 y≈47、正中只到 y≈50，避免额头上留下「洞」
+                             （旧版正中谷底到 y=41，会在发中露出一块和嘴巴差不多大的皮肤） -->
+                        <path d="M28,60
+                                 C26,34 40,22 60,22
+                                 C80,22 94,34 92,60
+                                 C91,52 89,48 88,47
+                                 C86,52 84,55 81,56
+                                 C79,52 77,49 74,47
+                                 C72,52 70,55 67,56
+                                 C65,53 62,51 60,50
+                                 C58,51 55,53 53,56
+                                 C50,55 48,52 46,47
+                                 C43,52 41,55 39,56
+                                 C36,52 34,49 33,47
+                                 C31,51 29,55 28,60 Z" fill="url(#petHair)"/>
+                        <path class="pet-ahoge" d="M57,25 C52,11 66,4 72,8 C66,12 62,17 61,26 Z" fill="url(#petHair)"/>
+                        <path d="M29,56 C24,68 24,80 28,90 C31,82 32,70 33,60 Z" fill="url(#petHair)"/>
+                        <path d="M91,56 C96,68 96,80 92,90 C89,82 88,70 87,60 Z" fill="url(#petHair)"/>
+                        <path d="M75,33.5 l3.2,3.2 l-3.2,3.2 l-3.2,-3.2 Z" fill="#fbbf24"/>
+                    </g>
+
+                    <!-- 状态挂件 -->
+                    <g class="pet-prop pet-prop-think">
+                        <circle cx="93" cy="35" r="3" fill="#a5b4fc"/>
+                        <circle cx="103" cy="28" r="2.4" fill="#a5b4fc"/>
+                        <circle cx="110" cy="21" r="1.7" fill="#a5b4fc"/>
+                    </g>
+                    <g class="pet-prop pet-prop-work">
+                        <path d="M96,50 l2.6,6.4 l6.4,2.6 l-6.4,2.6 l-2.6,6.4 l-2.6,-6.4 l-6.4,-2.6 l6.4,-2.6 Z" fill="#fbbf24"/>
+                        <path d="M84,38 l1.6,4 l4,1.6 l-4,1.6 l-1.6,4 l-1.6,-4 l-4,-1.6 l4,-1.6 Z" fill="#fde68a"/>
+                    </g>
+                </svg>
+                <div id="petBubble"></div>
+            </div>
+        </div>
+    </div>
+    <!-- 右侧：工作流可视化 -->
+    <div class="workflow-panel">
+        <div class="workflow-header">
+            <div class="title">
+                <span>🔍</span> 执行流程
+                <div class="thinking-indicator" id="thinkingIndicator">
+                    <div class="thinking-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    分析中
+                </div>
+            </div>
+            <button class="stop-btn" id="workflowStopBtn" onclick="stopTask()">⏹ 终止</button>
+        </div>
+        <div class="workflow-steps" id="workflowSteps">
+            <div class="empty-state" id="emptyState">
+                <div class="icon">⚡</div>
+                <span>发送任务后，这里会实时展示<br>AI 执行的每一步操作</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧第三栏：多模型讨论。只在讨论模式下出现，替掉执行流程栏
+         （讨论全程不调工具，那一栏本来就是空的） -->
+    <div class="discuss-panel" id="discussPanel">
+        <div class="discuss-header">
+            <div class="title">
+                <span>🗣</span> 模型讨论
+                <div class="discuss-badge" id="discussHint">等待议题</div>
+            </div>
+            <button class="discuss-pause-btn" id="discussPauseBtn"
+                    onclick="togglePause()" title="暂停后可以自己插话">⏸ 暂停</button>
+        </div>
+        <div class="discuss-roles-bar" id="discussRolesBar"></div>
+        <div class="discuss-messages" id="discussMessages">
+            <div class="discuss-empty" id="discussEmpty">
+                <div class="icon">🗣</div>
+                <span>切到讨论模式后发一个议题，<br>几个模型会在这里吵给你看</span>
+            </div>
+        </div>
+        <div class="discuss-input-area">
+            <input type="text" id="interjectInput"
+                   placeholder="想插话？先点「暂停」，这里打字…"
+                   onkeydown="if(event.key==='Enter') sendInterjection()" />
+            <button class="btn-interject" onclick="sendInterjection()">发言</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const chatMessages = document.getElementById('chatMessages');
+    const workflowSteps = document.getElementById('workflowSteps');
+    const emptyState = document.getElementById('emptyState');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const workflowStopBtn = document.getElementById('workflowStopBtn');
+    const thinkingIndicator = document.getElementById('thinkingIndicator');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    const discussMessages = document.getElementById('discussMessages');
+    const discussPanel = document.getElementById('discussPanel');
+    const discussPauseBtn = document.getElementById('discussPauseBtn');
+    const discussHint = document.getElementById('discussHint');
+    const interjectInput = document.getElementById('interjectInput');
+    const discussRolesBar = document.getElementById('discussRolesBar');
+
+    let currentEventSource = null;
+    let currentStepNodes = [];
+    let uploadedFiles = [];  // {id, name, path, is_image, preview}
+    let stopFallbackTimer = null;  // 停止兜底：30 秒没等到后端的 error 事件就强制收尾
+    let streamBubble = null;       // 正在打字的气泡(.message 容器)
+    let streamTextEl = null;       // 气泡里的文本容器(.message-bubble)
+    let streamText = '';           // 当前回合已累积的原始文本(完结时统一渲染 markdown)
+
+    // ====== 多模型讨论的状态 ======
+    let discussionMode = false;    // 顶栏那个开关
+    let discussPaused = false;     // 是否已向后端发出暂停
+    let curSpeaker = null;         // 当前发言者 {key,name,avatar,color}
+    let speakerCol = null;         // 当前发言者的竖列容器(思考框插在它里面)
+    let speakerBubble = null;      // 当前发言者的正文气泡
+    let speakerText = '';          // 当前发言者已累积的正文
+    let speakerBubbleRef = null;   // 最近一个定型的正文气泡(结论要往它上面挂按钮)
+    let reasonBox = null;          // 当前发言者的思考过程框
+    let reasonTextEl = null;
+    let reasonChars = 0;
+    let selectedRoles = [];        // 用户勾选的参与者角色 key
+    let allRoles = [];             // 后端返回的全部可选角色
+
+    // ====== 状态管理 ======
+    function setStatus(busy) {
+        if (busy) {
+            statusDot.className = 'status-dot';
+            statusText.textContent = '工作中...';
+            sendBtn.disabled = true;
+            chatInput.disabled = true;
+            stopBtn.classList.add('visible');
+            workflowStopBtn.classList.add('visible');
+        } else {
+            statusDot.className = 'status-dot idle';
+            statusText.textContent = '就绪';
+            sendBtn.disabled = false;
+            chatInput.disabled = false;
+            stopBtn.classList.remove('visible');
+            workflowStopBtn.classList.remove('visible');
+            thinkingIndicator.classList.remove('active');
+            chatInput.focus();
+        }
+    }
+
+    // ====== 终止任务 ======
+    // 新逻辑:先通知后端取消(cancel_event),后端会中止任务并回滚文件,
+    // 然后通过 SSE 返回 error 事件;前端等收到 error 事件才真正收尾。
+    // 兜底计时器:后端最长 30 秒(正在执行的代码无法打断)必然结束,超时就强制收尾。
+    async function stopTask() {
+        if (!currentEventSource) {
+            setStatus(false);
+            return;
+        }
+        try {
+            await fetch('/api/stop', { method: 'POST' });
+        } catch (e) { /* 服务器连不上时只能本地断开 */ }
+        statusText.textContent = '停止中(回滚完成后即可继续)...';
+        if (stopFallbackTimer) clearTimeout(stopFallbackTimer);
+        stopFallbackTimer = setTimeout(() => {
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+                setStatus(false);
+            }
+        }, 30000);
+    }
+
+    // ====== 开启新对话 ======
+    function newConversation() {
+        if (currentEventSource) {
+            currentEventSource.close();
+            currentEventSource = null;
+        }
+        if (stopFallbackTimer) clearTimeout(stopFallbackTimer);
+        // 清空后端历史
+        fetch('/api/reset');
+        // 重置界面到初始状态
+        resetChatUI();
+    }
+
+    // ====== 消息渲染(安全:先消毒再插 HTML) ======
+    // 旧的 formatContent 是手写正则,有两个问题:
+    // 1) 先替换代码块再替换 **加粗** 等,正则会在 <pre> 里二次生效,把代码内容改坏;
+    // 2) 内容未经转义直接 innerHTML,模型输出里的 HTML 就是 XSS 注入。
+    // 现在:marked 渲染 Markdown → DOMPurify 消毒 → 文本节点里的产物路径转链接。
+    function renderMarkdown(text) {
+        if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+            // 静态库没加载成功时的降级:纯文本转义 + 保留换行,至少不会 XSS
+            return escapeHtml(text || '').replace(/\n/g, '<br>');
+        }
+        text = String(text || '');
+        // 模型偶尔会用独立的 "---" 行开头(大概是拿它当回复间的分隔),
+        // 渲染出来就是气泡顶部一条难看的横线,而开头的分隔线没有任何信息量,直接去掉
+        text = text.replace(/^\s*(?:---|\*\*\*|___)\s*(\r?\n|$)/, '');
+        const rawHtml = marked.parse(text, { gfm: true, breaks: true });
+        const cleanHtml = DOMPurify.sanitize(rawHtml);
+        const holder = document.createElement('div');
+        holder.innerHTML = cleanHtml;
+        linkifyOutputPaths(holder);  // 把 output/ 产物路径变成可点击链接
+        return holder.innerHTML;
+    }
+
+    // 把文本节点里形如 "D:\ai工作流\output\snake.html" 或 "output\snake.html"
+    // 的路径替换成 /output/ 相对链接(file:// 链接在浏览器里是被禁止跳转的)。
+    function linkifyOutputPaths(root) {
+        const nodes = [];
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+
+        for (let node of nodes) {
+            let text = node.nodeValue || '';
+            let lower = text.toLowerCase();
+            let pos = -1;
+            while (true) {
+                pos = lower.indexOf('output', pos + 1);
+                if (pos < 0) break;
+                // output 之后必须紧跟 \ 或 / 才算路径
+                const sepIdx = pos + 6;
+                if (sepIdx >= text.length) break;
+                const sep = text[sepIdx];
+                if (sep !== '\\' && sep !== '/') continue;
+                // 向后取路径:遇到空白/引号/括号/中文标点即停
+                let end = sepIdx + 1;
+                while (end < text.length && !/[\s,;，。！？：:;'"<>()（）\[\]{}]/.test(text[end])) end++;
+                if (end === sepIdx + 1) continue;
+
+                const relRaw = text.slice(sepIdx + 1, end).replace(/\\/g, '/');
+                const href = '/output/' + encodeURI(relRaw.replace(/^\/+/, ''));
+
+                node.nodeValue = text.slice(0, pos);
+                const a = document.createElement('a');
+                a.href = href;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.textContent = '📄 ' + relRaw;
+                node.parentNode.insertBefore(a, node.nextSibling);
+                const rest = document.createTextNode(text.slice(end));
+                node.parentNode.insertBefore(rest, a.nextSibling);
+                // 继续在剩余文本里找下一个 output 路径
+                node = rest;
+                text = rest.nodeValue || '';
+                lower = text.toLowerCase();
+                pos = -1;
+            }
+        }
+    }
+
+    function addMessage(role, content) {
+        const div = document.createElement('div');
+        div.className = `message ${role}`;
+        div.innerHTML = `<div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>`;
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.innerHTML = renderMarkdown(content || '');
+        div.appendChild(bubble);
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return bubble;  // 返回气泡元素,方便调用方继续操作
+    }
+
+    // ====== 打字机气泡 ======
+    // 引擎现在把模型回复逐字(text_delta 事件)推给前端,边收边显示;
+    // 回合结束时(工具调用/完成/出错)统一把累积的原文渲染成 Markdown。
+    function openStreamBubble() {
+        const div = document.createElement('div');
+        div.className = 'message agent';
+        div.innerHTML = '<div class="message-avatar">🤖</div>';
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble typing';
+        div.appendChild(bubble);
+        chatMessages.appendChild(div);
+        streamBubble = div;
+        streamTextEl = bubble;
+        streamText = '';
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function finalizeStreamBubble() {
+        if (!streamBubble) return;
+        streamTextEl.classList.remove('typing');
+        streamTextEl.innerHTML = renderMarkdown(streamText || '');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        streamBubble = null;
+        streamTextEl = null;
+        // 注意:不清空 streamText,由调用方决定重置时机
+    }
+
+    // ====== 工作流步骤 ======
+    function addStepNode(type, detail) {
+        if (emptyState) emptyState.style.display = 'none';
+
+        const node = document.createElement('div');
+        node.className = 'step-node';
+
+        let dotClass = type === 'tool' ? 'tool' : type === 'result' ? 'result'
+            : type === 'notice' ? 'notice' : type === 'approval' ? 'approval' : 'error';
+        let boxClass = type === 'error' ? 'error-box' : type === 'notice' ? 'notice-box'
+            : type === 'approval' ? 'approval-box' : '';
+        let contentHTML = '';
+
+        if (type === 'tool') {
+            let argsPreview = JSON.stringify(detail.args);
+            if (argsPreview.length > 80) argsPreview = argsPreview.slice(0, 80) + '...';
+            contentHTML = `
+                <div class="step-label">🔧 ${detail.name}</div>
+                <div class="step-args">${escapeHtml(argsPreview)}</div>
+            `;
+        } else if (type === 'result') {
+            contentHTML = `
+                <div class="step-label">✅ ${detail.name} 返回</div>
+                <div class="step-result-text">${escapeHtml(detail.result)}</div>
+            `;
+        } else if (type === 'notice') {
+            contentHTML = `
+                <div class="step-label">🔁 自动重试</div>
+                <div class="step-result-text">${escapeHtml(detail)}</div>
+            `;
+        } else if (type === 'approval') {
+            // 越界操作征求用户同意:显示要做什么,附允许/拒绝按钮
+            contentHTML = `
+                <div class="step-label">🛡 需要确认 · 要访问工作区之外</div>
+                <div class="step-result-text">${escapeHtml(detail.description)}</div>
+                <div class="approval-btns" id="ap-btns-${detail.id}">
+                    <button class="btn-allow" onclick="askApprove('${detail.id}', true)">允许一次</button>
+                    <button class="btn-deny" onclick="askApprove('${detail.id}', false)">拒绝</button>
+                </div>
+                <div class="approval-wait" id="ap-wait-${detail.id}">⏳ 等待你决定……（也可以点「停止」中断任务）</div>
+            `;
+        } else if (type === 'error') {
+            contentHTML = `<div class="step-label">❌ 错误</div><div class="step-result-text">${escapeHtml(detail)}</div>`;
+        }
+
+        node.innerHTML = `
+            <div class="step-line">
+                <div class="step-dot ${dotClass}"></div>
+                <div class="step-connector"></div>
+            </div>
+            <div class="step-content ${boxClass}">${contentHTML}</div>
+        `;
+
+        workflowSteps.appendChild(node);
+        workflowSteps.scrollTop = workflowSteps.scrollHeight;
+        currentStepNodes.push(node);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ====== 越界操作确认 ======
+    async function askApprove(id, decision) {
+        const btns = document.getElementById('ap-btns-' + id);
+        const wait = document.getElementById('ap-wait-' + id);
+        // 点击后立刻锁住按钮,防止重复提交
+        if (btns) {
+            btns.querySelectorAll('button').forEach(b => b.disabled = true);
+            btns.innerHTML = '';
+        }
+        try {
+            const res = await fetch('/api/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, decision })
+            });
+            if (!res.ok) {
+                // 404:请求已过期/已答复(比如切换模型清空过)
+                if (wait) wait.textContent = '⏳ 该确认请求已过期或已被处理。';
+                return;
+            }
+            if (wait) wait.textContent = decision
+                ? '✅ 已允许,正在执行…'
+                : '🛑 已拒绝,模型将改用工作区内的路径。';
+        } catch (e) {
+            console.error('确认请求发送失败:', e);
+            if (wait) wait.textContent = '❌ 发送失败,请检查服务器连接。';
+            // 失败时恢复按钮,允许重试
+            if (btns) {
+                btns.innerHTML = `
+                    <button class="btn-allow" onclick="askApprove('${id}', true)">允许一次</button>
+                    <button class="btn-deny" onclick="askApprove('${id}', false)">拒绝</button>
+                `;
+            }
+        }
+    }
+
+    function clearWorkflow() {
+        workflowSteps.innerHTML = '';
+        if (emptyState) {
+            workflowSteps.appendChild(emptyState);
+            emptyState.style.display = '';
+        }
+        currentStepNodes = [];
+    }
+
+    // ====== 文件上传 ======
+    async function handleFileUpload() {
+        const input = document.getElementById('fileInput');
+        const files = Array.from(input.files);
+        if (files.length === 0) return;
+
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.id) {
+                    uploadedFiles.push(data);
+                    renderFilePreview();
+                }
+            } catch(e) {
+                console.error('上传失败:', e);
+            }
+        }
+        input.value = '';
+    }
+
+    function renderFilePreview() {
+        const container = document.getElementById('filePreview');
+        container.innerHTML = uploadedFiles.map((f, i) => {
+            const icon = f.is_image ? `<img src="/api/upload/${f.id}" onerror="this.style.display='none'" />` : '📄';
+            return `<span class="file-tag">
+                ${icon}<span class="file-name" title="${f.name}">${f.name}</span>
+                <span class="file-remove" onclick="removeFile(${i})">✕</span>
+            </span>`;
+        }).join('');
+    }
+
+    function removeFile(index) {
+        uploadedFiles.splice(index, 1);
+        renderFilePreview();
+    }
+
+    // ====== 发送消息 ======
+    // overrideText: 传字符串时用它代替输入框内容(「按这个结论去执行」用),
+    // 并且强制走聊天通道 —— 讨论产出的结论要交给执行引擎干活,不是再讨论一遍。
+    function sendMessage(overrideText, displayText) {
+        const forced = (typeof overrideText === 'string');
+        const message = (forced ? overrideText : chatInput.value).trim();
+        if ((!message && uploadedFiles.length === 0) || sendBtn.disabled) return;
+
+        // 讨论模式:走另一条链路(纯文字多模型,不调工具)
+        if (discussionMode && !forced) {
+            startDiscussion(message);
+            return;
+        }
+
+        // 显示用户消息
+        let displayMsg = (typeof displayText === 'string') ? displayText : (message || '');
+        if (uploadedFiles.length > 0) {
+            const fileNames = uploadedFiles.map(f => f.is_image ? `[图片: ${f.name}]` : `[文件: ${f.name}]`).join(' ');
+            displayMsg = displayMsg ? `${displayMsg}\n${fileNames}` : fileNames;
+        }
+        addMessage('user', displayMsg);
+        chatInput.value = '';
+        clearWorkflow();
+        setStatus(true);
+
+        // 构建 URL
+        let url = `/api/chat?message=${encodeURIComponent(message)}`;
+        if (uploadedFiles.length > 0) {
+            url += '&files=' + uploadedFiles.map(f => f.id).join(',');
+        }
+
+        // 发送后清空上传列表
+        uploadedFiles = [];
+        renderFilePreview();
+
+        const es = new EventSource(url);
+        currentEventSource = es;
+        // 桌宠旁听：只读事件，不参与渲染；出错也绝不影响聊天
+        es.addEventListener('message', function (ev) {
+            try { petFeed('chat', ev.data); } catch (err) {}
+        });
+        let hasReceivedEvent = false;
+
+        es.onmessage = function(event) {
+            hasReceivedEvent = true;
+            const data = JSON.parse(event.data);
+
+            switch (data.type) {
+                case 'start':
+                    break;
+
+                case 'thinking':
+                    // 新的一轮 LLM 思考开始:收尾上一轮的气泡,并重置本轮累积文本
+                    finalizeStreamBubble();
+                    streamText = '';
+                    thinkingIndicator.classList.add('active');
+                    break;
+
+                case 'text_delta':
+                    // 模型回复逐字到达 → 打字机
+                    thinkingIndicator.classList.remove('active');
+                    if (!streamBubble) openStreamBubble();
+                    streamText += data.content;
+                    streamTextEl.textContent = streamText;  // 打字中不解析 Markdown
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    break;
+
+                case 'notice':
+                    addStepNode('notice', data.message);
+                    break;
+
+                case 'tool_call':
+                    // 模型决定调用工具:文字部分先定型成 Markdown
+                    finalizeStreamBubble();
+                    thinkingIndicator.classList.remove('active');
+                    addStepNode('tool', { name: data.name, args: data.args });
+                    break;
+
+                case 'approval_request':
+                    // 越界操作征求同意:任务暂停,等用户点允许/拒绝
+                    finalizeStreamBubble();
+                    thinkingIndicator.classList.remove('active');
+                    addStepNode('approval', {
+                        id: data.id,
+                        description: data.description
+                    });
+                    break;
+
+                case 'tool_result':
+                    addStepNode('result', { name: data.name, result: data.result });
+                    break;
+
+                case 'complete':
+                    finalizeStreamBubble();
+                    thinkingIndicator.classList.remove('active');
+                    clearTimeout(stopFallbackTimer);
+                    es.close();
+                    currentEventSource = null;
+                    setStatus(false);
+                    // 极少数回合模型没有任何流式文本,补一条气泡
+                    if (!streamText && data.result) addMessage('agent', data.result);
+                    streamText = '';
+                    break;
+
+                case 'error':
+                    finalizeStreamBubble();
+                    thinkingIndicator.classList.remove('active');
+                    clearTimeout(stopFallbackTimer);
+                    addStepNode('error', data.message);
+                    es.close();
+                    currentEventSource = null;
+                    setStatus(false);
+                    streamText = '';
+                    addMessage('agent', '❌ ' + data.message);
+                    break;
+            }
+        };
+
+        es.addEventListener('error', function() {
+            // EventSource 连接层错误:如果已收到过业务事件,说明只是流结束时的
+            // 正常断开(complete/error 已经处理),忽略即可。
+            if (!hasReceivedEvent) {
+                clearTimeout(stopFallbackTimer);
+                finalizeStreamBubble();
+                es.close();
+                currentEventSource = null;
+                setStatus(false);
+                addMessage('agent', '连接失败，请检查服务器是否正常运行。');
+            }
+        });
+    }
+
+    // ====== 多模型讨论 ======
+    // 讨论走一条独立的 SSE(/api/discuss)，内容渲染在右侧「模型讨论」栏里，
+    // 主聊天区只留议题和最终结论 —— 不然几万字的吵架过程会把对话上下文冲掉。
+    //
+    // 一次讨论的完整流程：切模式 → 勾参与者 → 发议题 → 看它们吵（可以暂停插话）
+    // → 出结论 → 决定要不要交给执行引擎去干活。
+
+    function toggleMode() {
+        discussionMode = !discussionMode;
+        document.body.classList.toggle('discussing', discussionMode);
+        const btn = document.getElementById('modeBtn');
+        btn.textContent = discussionMode ? '🗣 讨论模式' : '💬 聊天模式';
+        btn.classList.toggle('active', discussionMode);
+        // 讨论引擎不读图也不读附件，上传按钮在这一模式下没有意义
+        document.getElementById('uploadBtn').style.display = discussionMode ? 'none' : '';
+        chatInput.placeholder = discussionMode
+            ? '输入一个议题，让几个模型互相挑错…'
+            : '输入任务或直接聊天...';
+        if (discussionMode && !allRoles.length) loadRoles();
+    }
+
+    async function loadRoles() {
+        try {
+            const res = await fetch('/api/discussion-roles');
+            const data = await res.json();
+            allRoles = data.roles || [];
+            if (!selectedRoles.length) {
+                selectedRoles = (data.default && data.default.participants || []).slice();
+            }
+            renderRoles();
+        } catch(e) {}
+    }
+
+    function renderRoles() {
+        discussRolesBar.innerHTML = '';
+        allRoles.forEach(r => {
+            const on = selectedRoles.includes(r.key);
+            const chip = document.createElement('span');
+            chip.className = 'role-chip' + (on ? ' on' : '');
+            chip.textContent = `${r.avatar} ${r.name}`;
+            chip.title = `模型: ${r.model}${on ? '（点击取消）' : '（点击加入）'}`;
+            if (on) {
+                chip.style.borderColor = r.color + '99';
+                chip.style.background = r.color + '22';
+                chip.style.color = r.color;
+            }
+            chip.onclick = () => {
+                if (currentEventSource) { alert('讨论进行中，等结束再改参与者'); return; }
+                const i = selectedRoles.indexOf(r.key);
+                if (i >= 0) selectedRoles.splice(i, 1); else selectedRoles.push(r.key);
+                renderRoles();
+            };
+            discussRolesBar.appendChild(chip);
+        });
+    }
+
+    function startDiscussion(message) {
+        if (!selectedRoles.length) {
+            alert('至少要选一个参与讨论的角色（在「模型讨论」栏顶部勾选）');
+            return;
+        }
+        addMessage('user', message);
+        chatInput.value = '';
+        setStatus(true);
+
+        // 清空上一场：讨论记录是本场的，不跨场累积
+        discussMessages.innerHTML = '<div class="discuss-empty" id="discussEmpty">'
+            + '<div class="icon">🗣</div><span>正在召集模型…</span></div>';
+        discussHint.textContent = '准备中…';
+        setPauseUI(false);
+
+        const url = `/api/discuss?message=${encodeURIComponent(message)}`
+                  + `&participants=${encodeURIComponent(selectedRoles.join(','))}`;
+        const es = new EventSource(url);
+        currentEventSource = es;
+        // 桌宠旁听：讨论全程显示「思考中」
+        es.addEventListener('message', function (ev) {
+            try { petFeed('discuss', ev.data); } catch (err) {}
+        });
+        let got = false;
+        es.onmessage = function(event) {
+            got = true;
+            handleDiscussEvent(JSON.parse(event.data), es);
+        };
+        es.addEventListener('error', function() {
+            // 和聊天一样：收到过业务事件就说明只是流正常结束，忽略
+            if (!got) {
+                es.close();
+                currentEventSource = null;
+                setStatus(false);
+                addStepNode('error', '讨论连接失败，请检查服务器是否正常运行。');
+            }
+        });
+    }
+
+    function handleDiscussEvent(data, es) {
+        switch (data.type) {
+            case 'round':
+                addRoundDivider(data.label, '');
+                discussHint.textContent = data.label;
+                break;
+            case 'speaker_start':
+                openSpeaker(data);
+                discussHint.textContent = `${data.avatar} ${data.speaker_name} 发言中…`;
+                break;
+            case 'reasoning_delta':
+                appendReasoning(data.content);
+                break;
+            case 'text_delta':
+                appendSpeakerText(data.content);
+                break;
+            case 'speaker_end':
+                finalizeSpeaker();
+                break;
+            case 'paused':
+                setPauseUI(true);
+                addRoundDivider('已暂停 · 现在可以插话了', 'paused');
+                discussHint.textContent = '已暂停';
+                break;
+            case 'resumed':
+                setPauseUI(false);
+                discussHint.textContent = '继续讨论…';
+                break;
+            case 'user_said':
+                addUserUtterance(data.text);
+                break;
+            case 'notice':
+                addDiscussNotice(data.message);
+                break;
+            case 'complete':
+                finalizeSpeaker();
+                finishDiscussion(data.result);
+                closeDiscussStream(es);
+                break;
+            case 'error':
+                finalizeSpeaker();
+                addDiscussNotice('❌ ' + data.message, true);
+                closeDiscussStream(es);
+                break;
+        }
+    }
+
+    // ---- 渲染 ----
+    function hideDiscussEmpty() {
+        const el = document.getElementById('discussEmpty');
+        if (el) el.style.display = 'none';
+    }
+
+    // 只在用户本来就贴着底部时才自动滚 —— 他往上翻看历史时别把他拽下来
+    function scrollDiscuss(force) {
+        const el = discussMessages;
+        if (force || el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }
+
+    function addRoundDivider(label, cls) {
+        hideDiscussEmpty();
+        const div = document.createElement('div');
+        div.className = 'dm-round' + (cls ? ' ' + cls : '');
+        const span = document.createElement('span');
+        span.className = 'phase';
+        span.textContent = label;
+        div.appendChild(span);
+        discussMessages.appendChild(div);
+        scrollDiscuss();
+    }
+
+    function addDiscussNotice(text, isError) {
+        hideDiscussEmpty();
+        const div = document.createElement('div');
+        div.className = 'dm-round';
+        const span = document.createElement('span');
+        span.className = 'phase';
+        span.textContent = text;
+        span.style.whiteSpace = 'normal';
+        span.style.color = isError ? '#f87171' : '#7c8db5';
+        div.appendChild(span);
+        discussMessages.appendChild(div);
+        scrollDiscuss(true);
+    }
+
+    function addUserUtterance(text) {
+        hideDiscussEmpty();
+        const row = document.createElement('div');
+        row.className = 'dm user';
+        row.innerHTML = '<div class="dm-avatar" style="background:rgba(96,165,250,0.2);'
+                      + 'border:1px solid rgba(96,165,250,0.5)">👤</div>';
+        const col = document.createElement('div');
+        col.className = 'dm-col';
+        const head = document.createElement('div');
+        head.className = 'dm-head';
+        head.innerHTML = '<span class="name" style="color:#60a5fa">你（插话）</span>';
+        col.appendChild(head);
+        const bubble = document.createElement('div');
+        bubble.className = 'dm-bubble';
+        bubble.style.borderLeftColor = '#60a5fa';
+        bubble.innerHTML = renderMarkdown(text);
+        col.appendChild(bubble);
+        row.appendChild(col);
+        discussMessages.appendChild(row);
+        scrollDiscuss(true);
+    }
+
+    function openSpeaker(sp) {
+        hideDiscussEmpty();
+        curSpeaker = sp;
+        speakerText = '';
+        reasonBox = null; reasonTextEl = null; reasonChars = 0;
+
+        const row = document.createElement('div');
+        row.className = 'dm';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'dm-avatar';
+        avatar.style.background = sp.color + '26';
+        avatar.style.border = '1px solid ' + sp.color + '66';
+        avatar.textContent = sp.avatar;
+        row.appendChild(avatar);
+
+        const col = document.createElement('div');
+        col.className = 'dm-col';
+
+        const head = document.createElement('div');
+        head.className = 'dm-head';
+        head.innerHTML = `<span class="name" style="color:${sp.color}">`
+                       + `${escapeHtml(sp.speaker_name)}</span>`
+                       + `<span class="model">${escapeHtml(sp.model_id || '')}</span>`;
+        col.appendChild(head);
+
+        const bubble = document.createElement('div');
+        bubble.className = 'dm-bubble typing';
+        bubble.style.borderLeftColor = sp.color;
+        col.appendChild(bubble);
+
+        row.appendChild(col);
+        discussMessages.appendChild(row);
+
+        speakerCol = col;
+        speakerBubble = bubble;
+        scrollDiscuss();
+    }
+
+    // 推理模型的思考过程：实时显示，用户才不会觉得十几秒的等待是卡死
+    function appendReasoning(text) {
+        if (!reasonBox) {
+            reasonBox = document.createElement('details');
+            reasonBox.className = 'reasoning-box streaming';
+            reasonBox.open = true;
+            const sum = document.createElement('summary');
+            sum.textContent = '思考中…';
+            reasonTextEl = document.createElement('div');
+            reasonTextEl.className = 'reasoning-text';
+            reasonBox.appendChild(sum);
+            reasonBox.appendChild(reasonTextEl);
+            speakerCol.insertBefore(reasonBox, speakerBubble);   // 插在正文气泡前面
+        }
+        reasonChars += text.length;
+        // 推理文本一律当纯文本，不解析 Markdown：里面全是没定稿的草稿，
+        // 解析出来的排版只会更乱，而且实时解析的开销也吃不消
+        reasonTextEl.textContent += text;
+        const nearBottom = reasonTextEl.scrollHeight - reasonTextEl.scrollTop
+                         - reasonTextEl.clientHeight < 40;
+        if (nearBottom) reasonTextEl.scrollTop = reasonTextEl.scrollHeight;
+        scrollDiscuss();
+    }
+
+    function finalizeReasoning() {
+        if (!reasonBox) return;
+        reasonBox.classList.remove('streaming');
+        reasonBox.querySelector('summary').textContent =
+            `思考过程（${reasonChars} 字，点开看）`;
+        reasonBox.open = false;   // 正文要开始了，思考过程收起来，别把正文顶下去
+    }
+
+    function appendSpeakerText(text) {
+        if (reasonBox && reasonBox.open) finalizeReasoning();
+        speakerText += text;
+        speakerBubble.textContent = speakerText;   // 打字中不解析 Markdown
+        scrollDiscuss();
+    }
+
+    function finalizeSpeaker() {
+        if (!speakerBubble) return;   // 已经定型过，别把内容覆盖成空
+        speakerBubble.classList.remove('typing');
+        speakerBubble.innerHTML = speakerText
+            ? renderMarkdown(speakerText)
+            : '<i style="color:#5a6a8a">（这一轮没有产出正文）</i>';
+        speakerBubbleRef = speakerBubble;   // 结论按钮要挂到最后一个气泡上
+        speakerBubble = null;
+        speakerText = '';
+        curSpeaker = null;
+        scrollDiscuss();
+    }
+
+    function finishDiscussion(result) {
+        discussHint.textContent = '讨论结束';
+        setPauseUI(false);
+        if (speakerBubbleRef && speakerBubbleRef.closest('.dm')) {
+            speakerBubbleRef.closest('.dm').classList.add('conclusion');
+        }
+        if (!result) return;
+
+        // 结论同时落到主聊天区：那才是用户和助手对话的地方，
+        // 也是「按这个结论去执行」的入口
+        const bubble = addMessage('agent', result);
+        const actions = document.createElement('div');
+        actions.className = 'conclusion-actions';
+
+        const run = document.createElement('button');
+        run.textContent = '▶ 按这个结论去执行';
+        run.onclick = () => executeConclusion(result);
+        actions.appendChild(run);
+
+        const copy = document.createElement('button');
+        copy.textContent = '📋 复制结论';
+        copy.onclick = () => {
+            navigator.clipboard.writeText(result);
+            copy.textContent = '✓ 已复制';
+        };
+        actions.appendChild(copy);
+
+        bubble.appendChild(actions);
+    }
+
+    function closeDiscussStream(es) {
+        try { es.close(); } catch(e) {}
+        currentEventSource = null;
+        setStatus(false);
+        setPauseUI(false);
+    }
+
+    // ---- 暂停 / 插话 ----
+    function setPauseUI(paused) {
+        discussPaused = paused;
+        discussPauseBtn.textContent = paused ? '▶ 继续' : '⏸ 暂停';
+        discussPauseBtn.classList.toggle('paused', paused);
+        discussHint.classList.toggle('paused', paused);
+    }
+
+    async function togglePause() {
+        if (!currentEventSource) return;
+        const want = !discussPaused;
+        try {
+            const res = await fetch('/api/discuss/pause', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({paused: want})
+            });
+            if (!res.ok) return;
+            setPauseUI(want);
+            // 后端的闸门设在发言者之间，所以要等当前这个模型把话说完才真停
+            discussHint.textContent = want ? '将在当前发言结束后暂停…' : '继续讨论…';
+        } catch(e) {}
+    }
+
+    async function sendInterjection() {
+        const text = interjectInput.value.trim();
+        if (!text) return;
+        if (!currentEventSource) { alert('当前没有正在进行的讨论'); return; }
+        try {
+            const res = await fetch('/api/discuss/say', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: text})
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert(err.error || '发言失败');
+                return;
+            }
+            interjectInput.value = '';
+            // 说完自动继续：用户的实际动作是「暂停 → 打字 → 继续讨论」，
+            // 再让他点一次「继续」是多余的一步
+            if (discussPaused) togglePause();
+        } catch(e) {}
+    }
+
+    function executeConclusion(text) {
+        if (currentEventSource) { alert('请先等当前任务结束'); return; }
+        if (discussionMode) toggleMode();   // 干活走聊天通道
+        const preview = text.length > 180
+            ? text.slice(0, 180) + ' …（完整结论已作为任务发出）'
+            : text;
+        sendMessage(text, '▶ 按讨论结论执行\n\n' + preview);
+    }
+
+    function resetDiscussUI() {
+        discussMessages.innerHTML = '<div class="discuss-empty" id="discussEmpty">'
+            + '<div class="icon">🗣</div>'
+            + '<span>切到讨论模式后发一个议题，<br>几个模型会在这里吵给你看</span></div>';
+        discussHint.textContent = '等待议题';
+        discussHint.classList.remove('paused');
+        setPauseUI(false);
+        speakerBubble = null;
+        speakerBubbleRef = null;
+        reasonBox = null;
+        reasonTextEl = null;
+    }
+
+    // ====== 模型 / 角色管理 ======
+    // 欢迎消息(纯 HTML,会经 DOMPurify 消毒后渲染)
+    const WELCOME_TEXT = '你好呀主人~ 喵~ 🐱<br><br>我是 <b>小寒影</b>，一只会写代码的猫娘！<br><br>📂 <b>操作文件</b> — 查看目录、读写文件<br>🌐 <b>抓取网页</b> — 获取网页内容、调用 API<br>⚙️ <b>执行代码</b> — 运行 Python 脚本<br>🎨 <b>Blender 建模</b> — 生成 3D 模型<br><br>试试输入一个任务，或者直接和我聊天吧喵~';
+
+    function resetChatUI() {
+        chatMessages.innerHTML = '';
+        streamBubble = null;
+        streamTextEl = null;
+        streamText = '';
+        clearWorkflow();
+        resetDiscussUI();
+        uploadedFiles = [];
+        renderFilePreview();
+        setStatus(false);
+        addMessage('agent', WELCOME_TEXT);
+    }
+
+    async function loadStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            document.getElementById('modelBadge').textContent = '🧠 ' + data.model;
+            document.getElementById('toolBadge').textContent = '🔧 ' + data.tool_count + ' APIs';
+        } catch(e) {
+            document.getElementById('modelBadge').textContent = '🧠 离线';
+        }
+    }
+
+    async function loadModels() {
+        try {
+            const res = await fetch('/api/models');
+            const data = await res.json();
+            const sel = document.getElementById('modelSelector');
+            sel.innerHTML = '<option value="">切换模型...</option>';
+            data.models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.key;
+                opt.textContent = m.name + (m.vision ? ' 👁' : '');
+                if (m.key === data.active) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        } catch(e) {}
+    }
+
+    async function switchModel(key) {
+        if (!key) return;
+        // 任务运行中切模型会让新旧两个任务同时占用引擎/台账,先拦下来
+        if (currentEventSource) {
+            alert('请先停止当前任务，再切换模型');
+            loadModels();
+            return;
+        }
+        if (!confirm('切换模型将清空当前对话，确定吗？')) {
+            loadModels();
+            return;
+        }
+        try {
+            const res = await fetch('/api/switch-model', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({model: key})
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                resetChatUI();
+                loadStatus();
+            }
+        } catch(e) {}
+    }
+
+    // ====== 角色预设(persona) ======
+    async function loadPersonas() {
+        try {
+            const res = await fetch('/api/personas');
+            const data = await res.json();
+            const sel = document.getElementById('personaSelector');
+            sel.innerHTML = '<option value="">角色...</option>';
+            data.personas.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.key;
+                opt.textContent = p.name;
+                if (p.key === data.active) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            // 顶部徽标显示当前角色
+            loadStatus();
+        } catch(e) {}
+    }
+
+    async function setPersona(key) {
+        if (!key) return;
+        if (currentEventSource) {
+            alert('请先停止当前任务，再切换角色');
+            loadPersonas();
+            return;
+        }
+        if (!confirm('切换角色将清空当前对话，确定吗？')) {
+            loadPersonas();
+            return;
+        }
+        try {
+            const res = await fetch('/api/set-persona', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({persona: key})
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                resetChatUI();
+                loadStatus();
+            }
+        } catch(e) {}
+    }
+
+    // 页面加载时初始化
+    loadModels();
+    loadPersonas();
+    loadStatus();
+
+    // ====== 桌宠：小寒影的分身 ======
+    // 三条硬约束（沿用本项目既有讨论的结论）：
+    //   1) 只消费「已经推出来的」SSE 事件 —— 不改 main.py、不改 workflow_engine.py、不改 SSE 格式
+    //   2) 状态只是可视化，聊天界面才是唯一权威；桌宠出任何问题都不许影响主流程
+    //   3) 元素引用惰性获取 + 初始化推迟到 DOMContentLoaded ——
+    //      脚本在文档里跑在桌宠标记**之前**，旧版在这里同步取值必然拿到 null，
+    //      异常又被 try/catch 吞掉，于是「状态切换」和「气泡」从来没生效过。
+    const PET_POS_KEY = 'xiaohanying_pet_pos';
+    const PET_TOOL_LABEL = {
+        list_files: '翻目录', read_file: '读文件', write_file: '写文件',
+        execute_python: '跑 Python', fetch_url: '抓网页', api_get: '调接口',
+        run_blender: '开 Blender', run_blender_live: '开 Blender'
+    };
+    const PET_LINES = {
+        idle: ['喵~ 主人今天想让我做点什么？', '小寒影在待机中，耳朵竖着呢',
+               '要不要让我写个小网页试试？', '呼…刚才那个任务挺费脑子的喵',
+               '主人，摸摸头也不是不可以哦～'],
+        click: ['喵！', '诶嘿~', '主人叫我啦？', '在的在的喵~'],
+        many: ['喵喵喵！主人好烦哦…但我不讨厌', '再点下去耳朵要秃了啦！', '好啦好啦，我一直都在的喵~'],
+        think: ['容我想想…', '唔…这个有点绕', '让我捋一捋喵'],
+        done: ['做完啦！', '搞定喵~', '收工！主人看看行不行'],
+        err: ['呜…出错了喵', '这个我没搞定，对不起主人…'],
+        wait: ['卡住啦：等主人点「允许」才敢动', '这一步要主人点头才行喵']
+    };
+    const PET_PRESETS = [
+        '列出 output 目录里现有的文件',
+        '读一下 PROJECT_CONTEXT.md，然后告诉我这个项目现在能做什么',
+        '帮我写一个 1 分钟番茄钟的网页，放到 output 里',
+        '把 output 里的文件按大小排个序，告诉我最大的三个'
+    ];
+    const PET_IDLE_ACTS = [
+        ['act-twitch', 650], ['act-twitch2', 650], ['act-hop', 640],
+        ['act-stretch', 900], ['act-sway', 1500]
+    ];
+
+    let petEl = null, petBubbleEl = null;
+    let petState = 'idle';
+    let petBubbleTimer = null, petIdleTimer = null, petClickTimer = null, petFlashTimer = null;
+    let petClicks = 0, petPresetIdx = 0, petDragging = false;
+
+    function petRefs() {
+        if (!petEl) petEl = document.getElementById('pet');
+        if (!petBubbleEl) petBubbleEl = document.getElementById('petBubble');
+        return !!(petEl && petBubbleEl);
+    }
+    function petPick(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+    // ---- 气泡 ----
+    function petBubbleSide() {
+        if (!petRefs()) return;
+        const panel = petEl.offsetParent;
+        if (!panel) return;
+        // 靠面板左侧时气泡翻到右边，反之默认挂左边
+        petBubbleEl.classList.toggle('flip', petEl.offsetLeft < (panel.clientWidth || 1) * 0.34);
+    }
+    function petShow(text, ms) {
+        if (!petRefs() || !text) return;
+        petBubbleEl.textContent = text;
+        petBubbleSide();
+        petBubbleEl.classList.add('show');
+        clearTimeout(petBubbleTimer);
+        petBubbleTimer = setTimeout(function () { petBubbleEl.classList.remove('show'); }, ms || 2400);
+    }
+
+    // ---- 小动作 / 警示 ----
+    function petFlash(cls, ms) {
+        if (!petRefs()) return;
+        petEl.classList.add(cls);
+        clearTimeout(petFlashTimer);
+        petFlashTimer = setTimeout(function () { petEl.classList.remove(cls); }, ms);
+    }
+    function petBlink() { petFlash('blink', 150); }
+    function petAlert(on) { if (petRefs()) petEl.classList.toggle('alert', !!on); }
+
+    // ---- 状态机：idle / think / work / talk ----
+    function petSetState(s) {
+        if (!petRefs() || petState === s) return;
+        petState = s;
+        petEl.dataset.state = s;
+    }
+
+    // 收尾：先闪一下开心/难过，再回空闲
+    function petFinish(isError) {
+        petAlert(false);
+        petSetState('idle');
+        if (isError) {
+            petFlash('act-shake', 600);
+            petShow(petPick(PET_LINES.err), 2600);
+        } else {
+            petFlash('pet--happy', 1300);
+            petShow(petPick(PET_LINES.done), 2200);
+        }
+    }
+
+    // ---- 事件消费者：把已有事件翻译成表情 ----
+    // kind: 'chat' = /api/chat 的 Agent 事件；'discuss' = /api/discuss 的讨论事件
+    function petFeed(kind, raw) {
+        let d;
+        try { d = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return; }
+        if (!d || !d.type) return;
+        const t = d.type;
+
+        if (kind === 'discuss') {
+            // 讨论：全程「思考」，暂停时歇一下，出结论就庆祝
+            if (t === 'paused') {
+                petSetState('idle');
+                petShow('暂停啦，主人想说什么？', 2600);
+            } else if (t === 'complete') {
+                petFinish(false);
+            } else if (t === 'error') {
+                petFinish(true);
+            } else {
+                petSetState('think');
+                if (t === 'round') petShow(d.label || '新一轮…', 1800);
+                else if (t === 'speaker_start') petShow((d.avatar || '') + (d.speaker_name || '') + ' 在想…', 1800);
+                else if (t === 'user_said') petShow('主人插话啦，它们在听', 2000);
+            }
+            return;
+        }
+
+        petAlert(t === 'approval_request');   // 只有「等批准」这一刻才挂警示
+        switch (t) {
+            case 'start':
+            case 'thinking':
+                petSetState('think');
+                if (Math.random() < 0.35) petShow(petPick(PET_LINES.think), 1600);
+                break;
+            case 'text_delta':
+                petSetState('talk');
+                break;
+            case 'notice':
+                petSetState('think');
+                break;
+            case 'tool_call':
+                petSetState('work');
+                petShow('🔧 ' + (PET_TOOL_LABEL[d.name] || d.name || '干活') + '…', 2200);
+                break;
+            case 'tool_result':
+                petSetState('work');
+                break;
+            case 'approval_request':
+                petSetState('work');
+                petShow(petPick(PET_LINES.wait), 6000);
+                break;
+            case 'complete':
+                petFinish(false);
+                break;
+            case 'error':
+                petFinish(true);
+                break;
+        }
+    }
+
+    // ---- 点击 / 双击互动 ----
+    function petOnClick() {
+        if (!petRefs()) return;
+        petClicks++;
+        petFlash('act-hop', 640);
+        petShow(petClicks >= 5 && petClicks % 3 === 0 ? petPick(PET_LINES.many) : petPick(PET_LINES.click), 2000);
+    }
+    // 双击：把一条「对得上真实工具」的提示词填进输入框，可改可删，不自动发送
+    function petOnDblClick() {
+        if (!petRefs()) return;
+        const box = document.getElementById('chatInput');
+        if (!box) return;
+        if (box.disabled) { petShow('主人，小寒影还在忙呢…等会儿再点我喵~', 2600); return; }
+        const preset = PET_PRESETS[petPresetIdx % PET_PRESETS.length];
+        petPresetIdx++;
+        if (box.value.trim()) {
+            if (box.value.indexOf(preset) === -1) box.value = box.value.trim() + ' ' + preset;
+        } else {
+            box.value = preset;
+        }
+        box.focus();
+        try { box.setSelectionRange(box.value.length, box.value.length); } catch (e) {}
+        petFlash('pet--happy', 900);
+        petShow('喵~ 填好啦，改完再点发送哦！', 2600);
+    }
+
+    // ---- 拖动 + 位置记忆 ----
+    function petClamp() {
+        if (!petRefs()) return;
+        const panel = petEl.offsetParent;
+        if (!panel) return;
+        const w = petEl.offsetWidth, h = petEl.offsetHeight;
+        const maxL = Math.max(2, panel.clientWidth - w - 2);
+        const maxT = Math.max(2, panel.clientHeight - h - 2);
+        if (petEl.style.left !== '') {
+            petEl.style.left = Math.min(Math.max(parseFloat(petEl.style.left) || 0, 2), maxL) + 'px';
+        }
+        if (petEl.style.top !== '') {
+            petEl.style.top = Math.min(Math.max(parseFloat(petEl.style.top) || 0, 2), maxT) + 'px';
+        }
+        petBubbleSide();
+    }
+    function petSavePos() {
+        try {
+            localStorage.setItem(PET_POS_KEY, JSON.stringify({
+                left: petEl.style.left, top: petEl.style.top
+            }));
+        } catch (e) { /* 隐私模式等场景忽略 */ }
+    }
+    function petRestorePos() {
+        let v = null;
+        try { v = JSON.parse(localStorage.getItem(PET_POS_KEY) || 'null'); } catch (e) { v = null; }
+        if (v && v.left && v.top) {
+            petEl.style.left = v.left;
+            petEl.style.top = v.top;
+            petEl.style.right = 'auto';
+            petEl.style.bottom = 'auto';
+            petClamp();
+        }
+    }
+
+    function petBindDrag() {
+        let active = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+
+        petEl.addEventListener('pointerdown', function (e) {
+            if (e.button !== 0) return;
+            const panel = petEl.offsetParent;
+            if (!panel) return;
+            active = true; moved = false;
+            sx = e.clientX; sy = e.clientY;
+            ox = petEl.offsetLeft; oy = petEl.offsetTop;
+            petEl.style.left = ox + 'px';
+            petEl.style.top = oy + 'px';
+            petEl.style.right = 'auto';
+            petEl.style.bottom = 'auto';
+            try { petEl.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+
+        petEl.addEventListener('pointermove', function (e) {
+            if (!active) return;
+            const dx = e.clientX - sx, dy = e.clientY - sy;
+            if (!moved) {
+                if (Math.abs(dx) + Math.abs(dy) < 5) return;   // 抖动阈值内算点击
+                moved = true;
+                petDragging = true;
+                petEl.classList.add('dragging');
+            }
+            const panel = petEl.offsetParent;
+            const maxL = Math.max(2, panel.clientWidth - petEl.offsetWidth - 2);
+            const maxT = Math.max(2, panel.clientHeight - petEl.offsetHeight - 2);
+            petEl.style.left = Math.min(Math.max(ox + dx, 2), maxL) + 'px';
+            petEl.style.top = Math.min(Math.max(oy + dy, 2), maxT) + 'px';
+            petBubbleSide();
+        });
+
+        function petEnd(e) {
+            if (!active) return;
+            active = false;
+            petEl.classList.remove('dragging');
+            try { petEl.releasePointerCapture(e.pointerId); } catch (err) {}
+            if (moved) {
+                petDragging = false;
+                petSavePos();
+            }
+        }
+        petEl.addEventListener('pointerup', petEnd);
+        petEl.addEventListener('pointercancel', petEnd);
+
+        // 单击延迟 200ms：区分「点一下互动」和「双击填提示词」
+        petEl.addEventListener('click', function () {
+            if (moved) return;
+            clearTimeout(petClickTimer);
+            petClickTimer = setTimeout(petOnClick, 200);
+        });
+        petEl.addEventListener('dblclick', function () {
+            if (moved) return;
+            clearTimeout(petClickTimer);
+            petOnDblClick();
+        });
+        petEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); petOnClick(); }
+        });
+        window.addEventListener('resize', petClamp);
+    }
+
+    // ---- 随机待机小动作 ----
+    function petIdleTick() {
+        if (!petRefs() || petDragging) return;
+        if (petState === 'idle') {
+            const r = Math.random();
+            if (r < 0.30) { petBlink(); return; }
+            if (r < 0.44) { petShow(petPick(PET_LINES.idle), 2400); return; }
+            const a = petPick(PET_IDLE_ACTS);
+            petFlash(a[0], a[1]);
+        } else if (Math.random() < 0.5) {
+            petBlink();
+        }
+    }
+    function petScheduleIdle() {
+        clearTimeout(petIdleTimer);
+        petIdleTimer = setTimeout(function () { petIdleTick(); petScheduleIdle(); }, 2400 + Math.random() * 5200);
+    }
+
+    function petInit() {
+        if (!petRefs()) return;      // 标记不在页面里就整块放弃，保持纯装饰
+        petEl.dataset.state = petState;
+        petRestorePos();
+        petBindDrag();
+        petScheduleIdle();
+        petBubbleSide();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', petInit);
+    } else {
+        petInit();
+    }
+
+    // ---- 粗粒度兜底：万一某个事件没覆盖到，至少保证「忙→空闲」能回来 ----
+    // 只用业务层的 setStatus（发消息置忙 / complete、error 收尾），不用 onerror/onclose。
+    (function hookPetStatus() {
+        if (typeof setStatus !== 'function') return;
+        const _origSetStatus = setStatus;
+        setStatus = function (busy) {
+            _origSetStatus.apply(this, arguments);
+            try {
+                if (busy) { if (petState === 'idle') petSetState('think'); }
+                else { petAlert(false); petSetState('idle'); }
+            } catch (e) { /* 桌宠出错绝不影响主流程 */ }
+        };
+    })();
+</script>
+</body>
+</html>
